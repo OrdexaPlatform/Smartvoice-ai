@@ -1,19 +1,14 @@
 ```tsx
 import Link from "next/link";
-
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/components/ui/shell";
-
 import { requireBusiness } from "@/lib/business";
-
 import { createClient } from "@/lib/supabase/server";
-
 import {
   OrderStatusBadge,
   PaymentStatusBadge,
 } from "@/components/ui/badge";
-
 import {
   ORDER_STATUS_LABELS,
   PAYMENT_STATUS_LABELS,
@@ -90,7 +85,7 @@ export default async function CustomerDetailPage({
                 return (
                   <li key={o.id}>
                     <Link
-                      href={`/orders/${o.id}`}
+                      href={"/orders/" + o.id}
                       className="flex items-center justify-between py-2 text-sm hover:opacity-80"
                     >
                       <span>
@@ -123,7 +118,7 @@ export default async function CustomerDetailPage({
               {(invoices ?? []).map((inv) => (
                 <li key={inv.id}>
                   <Link
-                    href={`/invoices/${inv.id}`}
+                    href={"/invoices/" + inv.id}
                     className="flex items-center justify-between py-2 text-sm hover:opacity-80"
                   >
                     <span dir="ltr">{inv.invoice_number}</span>
