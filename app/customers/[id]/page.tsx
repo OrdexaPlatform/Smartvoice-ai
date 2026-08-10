@@ -1,4 +1,4 @@
-```tsx id="3q1xv9"
+```tsx id="q4b7ws"
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -14,6 +14,8 @@ import {
   PAYMENT_STATUS_LABELS,
   type OrderStatus,
 } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
 
 function formatMoney(amount: number, currency: string) {
   const formattedAmount = amount.toLocaleString("ar-EG", {
@@ -52,7 +54,9 @@ export default async function CustomerDetailPage({
 
     supabase
       .from("invoices")
-      .select("id, invoice_number, total, payment_status, created_at")
+      .select(
+        "id, invoice_number, total, payment_status, created_at"
+      )
       .eq("customer_id", customer.id)
       .order("created_at", { ascending: false }),
   ]);
@@ -89,7 +93,10 @@ export default async function CustomerDetailPage({
                       className="flex items-center justify-between py-2 text-sm hover:opacity-80"
                     >
                       <span>
-                        {formatMoney(Number(o.total), business.currency)}
+                        {formatMoney(
+                          Number(o.total),
+                          business.currency
+                        )}
                       </span>
 
                       <OrderStatusBadge
