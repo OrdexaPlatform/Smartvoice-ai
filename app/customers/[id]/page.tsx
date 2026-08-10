@@ -1,14 +1,16 @@
-```tsx id="q4b7ws"
+```tsx
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/components/ui/shell";
 import { requireBusiness } from "@/lib/business";
 import { createClient } from "@/lib/supabase/server";
+
 import {
   OrderStatusBadge,
   PaymentStatusBadge,
 } from "@/components/ui/badge";
+
 import {
   ORDER_STATUS_LABELS,
   PAYMENT_STATUS_LABELS,
