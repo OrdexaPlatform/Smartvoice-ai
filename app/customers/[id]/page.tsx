@@ -9,7 +9,10 @@ import { requireBusiness } from "@/lib/business";
 
 import { createClient } from "@/lib/supabase/server";
 
-import { OrderStatusBadge, PaymentStatusBadge } from "@/components/ui/badge";
+import {
+  OrderStatusBadge,
+  PaymentStatusBadge,
+} from "@/components/ui/badge";
 
 import {
   ORDER_STATUS_LABELS,
@@ -18,9 +21,11 @@ import {
 } from "@/lib/types";
 
 function formatMoney(amount: number, currency: string) {
-  return `${amount.toLocaleString("ar-EG", {
+  const formattedAmount = amount.toLocaleString("ar-EG", {
     minimumFractionDigits: 2,
-  })} ${currency}`;
+  });
+
+  return formattedAmount + " " + currency;
 }
 
 export default async function CustomerDetailPage({
