@@ -1,3 +1,4 @@
+```tsx
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -5,12 +6,16 @@ import { AppShell } from "@/components/ui/shell";
 import { requireBusiness } from "@/lib/business";
 import { createClient } from "@/lib/supabase/server";
 
-import { OrderStatusBadge, PaymentStatusBadge } from "@/components/ui/badge";
+import {
+  OrderStatusBadge,
+  PaymentStatusBadge,
+} from "@/components/ui/badge";
 
 import {
   ORDER_STATUS_LABELS,
   PAYMENT_STATUS_LABELS,
   type OrderStatus,
+  type PaymentStatus,
 } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +24,7 @@ function formatMoney(amount: number, currency: string) {
   const formattedAmount = amount.toLocaleString("ar-EG", {
     minimumFractionDigits: 2,
   });
+
   return formattedAmount + " " + currency;
 }
 
@@ -60,7 +66,9 @@ export default async function CustomerDetailPage({
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold">{customer.name}</h1>
+
           {customer.phone && <p>{customer.phone}</p>}
+
           {customer.address && <p>{customer.address}</p>}
         </div>
 
@@ -68,19 +76,29 @@ export default async function CustomerDetailPage({
           <h2 className="mb-3 font-semibold">
             الطلبات ({(orders ?? []).length})
           </h2>
+
           {(orders ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">لا توجد طلبات.</p>
+            <p className="text-sm text-muted-foreground">
+              لا توجد طلبات.
+            </p>
           ) : (
             <ul className="divide-y divide-border">
               {(orders ?? []).map((o) => {
                 const status = o.status as OrderStatus;
+
                 return (
                   <li key={o.id}>
                     <Link
                       href={"/orders/" + o.id}
                       className="flex items-center justify-between py-2 text-sm hover:opacity-80"
                     >
-                      <span>{formatMoney(Number(o.total), business.currency)}</span>
+                      <span>
+                        {formatMoney(
+                          Number(o.total),
+                          business.currency
+                        )}
+                      </span>
+
                       <OrderStatusBadge
                         status={status}
                         label={ORDER_STATUS_LABELS[status]}
@@ -97,27 +115,40 @@ export default async function CustomerDetailPage({
           <h2 className="mb-3 font-semibold">
             الفواتير ({(invoices ?? []).length})
           </h2>
+
           {(invoices ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">لا توجد فواتير.</p>
+            <p className="text-sm text-muted-foreground">
+              لا توجد فواتير.
+            </p>
           ) : (
             <ul className="divide-y divide-border">
-              {(invoices ?? []).map((inv) => (
-                <li key={inv.id}>
-                  <Link
-                    href={"/invoices/" + inv.id}
-                    className="flex items-center justify-between py-2 text-sm hover:opacity-80"
-                  >
-                    <span dir="ltr">{inv.invoice_number}</span>
-                    <span className="flex items-center gap-2">
-                      {formatMoney(Number(inv.total), business.currency)}
-                      <PaymentStatusBadge
-                        status={inv.payment_status}
-                        label={PAYMENT_STATUS_LABELS[inv.payment_status]}
-                      />
-                    </span>
-                  </Link>
-                </li>
-              ))}
+              {(invoices ?? []).map((inv) => {
+                const paymentStatus =
+                  inv.payment_status as PaymentStatus;
+
+                return (
+                  <li key={inv.id}>
+                    <Link
+                      href={"/invoices/" + inv.id}
+                      className="flex items-center justify-between py-2 text-sm hover:opacity-80"
+                    >
+                      <span dir="ltr">{inv.invoice_number}</span>
+
+                      <span className="flex items-center gap-2">
+                        {formatMoney(
+                          Number(inv.total),
+                          business.currency
+                        )}
+
+                        <PaymentStatusBadge
+                          status={paymentStatus}
+                          label={PAYMENT_STATUS_LABELS[paymentStatus]}
+                        />
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
@@ -125,3 +156,4 @@ export default async function CustomerDetailPage({
     </AppShell>
   );
 }
+```
