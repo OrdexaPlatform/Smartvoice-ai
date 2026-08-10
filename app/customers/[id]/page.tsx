@@ -33,7 +33,6 @@ export default async function CustomerDetailPage({
   params: { id: string };
 }) {
   const { business } = await requireBusiness();
-
   const supabase = createClient();
 
   const { data: customer } = await supabase
@@ -56,9 +55,7 @@ export default async function CustomerDetailPage({
 
     supabase
       .from("invoices")
-      .select(
-        "id, invoice_number, total, payment_status, created_at"
-      )
+      .select("id, invoice_number, total, payment_status, created_at")
       .eq("customer_id", customer.id)
       .order("created_at", { ascending: false }),
   ]);
