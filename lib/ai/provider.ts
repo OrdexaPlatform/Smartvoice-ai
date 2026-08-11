@@ -14,13 +14,13 @@ const SYSTEM_PROMPT = `أنت نظام استخراج بيانات من محاد
 - إذا لم توجد منتجات، اجعل items مصفوفة فارغة.
 - الكمية يجب أن تكون رقمًا.
 - السعر يجب أن يكون رقمًا فقط إذا كان مذكورًا بوضوح، وإلا null.
-- لا تحاول تخمين السعر من اسم المنتج.
-- delivery_date يجب أن يحتوي على التاريخ أو الوقت كما ذكره العميل، حتى لو كان بصيغة عامية مثل:
+- لا تخمن أي سعر.
+- delivery_date يجب أن يحتفظ بالتاريخ أو الوقت كما ذكره العميل، حتى لو كان بصيغة عامية مثل:
   "النهارده الساعة 8"
   "بكرة بالليل"
   "الخميس"
-  "اليوم 8 مساءً"
-  ولا تحاول تحويله إلى تاريخ SQL أو ISO؛ النظام الآخر سيتعامل معه.
+  "اليوم الساعة 8 مساءً"
+- لا تحاول تحويل delivery_date إلى تاريخ SQL أو ISO.
 - notes يجب أن تحتوي على أي معلومات إضافية مهمة ذكرها العميل.
 - payment_method يجب أن يكون واحدًا من:
   cash
@@ -28,7 +28,7 @@ const SYSTEM_PROMPT = `أنت نظام استخراج بيانات من محاد
   bank_transfer
   card
   other
-  أو null إذا لم يذكر العميل طريقة الدفع.
+  أو null.
 - payment_status يجب أن يكون:
   paid أو unpaid أو null.
 - لا تخترع اسم العميل أو رقم الهاتف أو العنوان.
@@ -103,22 +103,17 @@ export async function parseConversation(
 }
 
 async function callGemini(rawText: string): Promise<string> {
-  // ضع مفتاح Gemini الجديد هنا فقط.
-  // لا تضع GEMINI_API_KEY= قبله.
-  // لا تضع Project ID.
-  // لا تضع Project Number.
+  // ضع مفتاح Gemini الخاص بك هنا.
+  // لا ترسل المفتاح في المحادثة.
   const apiKey = "AQ.Ab8RN6LbEMa2wX-gzeOPw4meh6-ovq5QjdragBvYP47f5vN73g";
 
-  if (!apiKey || apiKey === "AQ.Ab8RN6LbEMa2wX-gzeOPw4meh6-ovq5QjdragBvYP47f5vN73g") {
+  if (!apiKey || apiKey === "ضع_مفتاح_GEMINI_هنا") {
     throw new AIParseError("مفتاح Gemini غير مضبوط.");
   }
 
   try {
     const ai = new GoogleGenAI({
       apiKey,
-      httpOptions: {
-        apiVersion: "v1",
-      },
     });
 
     const interaction = await ai.interactions.create({
@@ -131,7 +126,55 @@ async function callGemini(rawText: string): Promise<string> {
       store: false,
     });
 
-    const text = interaction.output_text;
+    /*
+     * Interaction لا يحتوي على output_text في TypeScript.
+     * نستخرج النص من output.
+     */
+    const output = interaction.output;
+
+    if (!Array.isArray(output) || output.length === 0) {
+      throw new AIParseError("رد الذكاء الاصطناعي فارغ.");
+    }
+
+    let text = "";
+
+    for (const item of output) {
+      if (!item || typeof item !== "object") {
+        continue;
+      }
+
+      const block = item as {
+        type?: string;
+        text?: string;
+        content?: unknown;
+      };
+
+      if (typeof block.text === "string") {
+        text += block.text;
+      }
+
+      if (
+        block.type === "text" &&
+        typeof block.content === "string"
+      ) {
+        text += block.content;
+      }
+
+      if (Array.isArray(block.content)) {
+        for (const contentItem of block.content) {
+          if (
+            contentItem &&
+            typeof contentItem === "object" &&
+            "text" in contentItem &&
+            typeof (contentItem as { text?: unknown }).text === "string"
+          ) {
+            text += (contentItem as { text: string }).text;
+          }
+        }
+      }
+    }
+
+    text = text.trim();
 
     if (!text) {
       throw new AIParseError("رد الذكاء الاصطناعي فارغ.");
@@ -152,4 +195,4 @@ async function callGemini(rawText: string): Promise<string> {
       err
     );
   }
-}
+      }
