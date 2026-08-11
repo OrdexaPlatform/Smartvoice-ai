@@ -18,6 +18,7 @@
     "@supabase/supabase-js": "^2.45.4",
     "@supabase/ssr": "^0.5.1",
     "@react-pdf/renderer": "^3.4.4",
+    "@google/genai": "^1.0.0",
     "zod": "^3.23.8",
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.5.2",
