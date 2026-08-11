@@ -10,6 +10,96 @@ export interface ReviewItem {
   unit_price: number;
 }
 
+function normalizeDeliveryDate(value: string): string | null {
+  const text = value.trim();
+
+  if (!text) {
+    return null;
+  }
+
+  // لو التاريخ بالفعل بصيغة YYYY-MM-DD
+  const isoMatch = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]);
+    const day = Number(isoMatch[3]);
+
+    const date = new Date(year, month - 1, day);
+
+    if (
+      date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day
+    ) {
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(
+        2,
+        "0"
+      )}`;
+    }
+  }
+
+  // لو AI رجّع تاريخ بصيغة DD/MM/YYYY أو DD-MM-YYYY
+  const arabicDateMatch = text.match(
+    /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/
+  );
+
+  if (arabicDateMatch) {
+    const day = Number(arabicDateMatch[1]);
+    const month = Number(arabicDateMatch[2]);
+    const year = Number(arabicDateMatch[3]);
+
+    const date = new Date(year, month - 1, day);
+
+    if (
+      date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day
+    ) {
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(
+        2,
+        "0"
+      )}`;
+    }
+  }
+
+  // لو AI رجّع تاريخ بصيغة YYYY/MM/DD
+  const yearFirstMatch = text.match(
+    /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/
+  );
+
+  if (yearFirstMatch) {
+    const year = Number(yearFirstMatch[1]);
+    const month = Number(yearFirstMatch[2]);
+    const day = Number(yearFirstMatch[3]);
+
+    const date = new Date(year, month - 1, day);
+
+    if (
+      date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day
+    ) {
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(
+        2,
+        "0"
+      )}`;
+    }
+  }
+
+  // لو مكتوب كلام مثل:
+  // اليوم الساعة 8 مساءً
+  // بكرة الساعة 6
+  // بعد بكرة
+  //
+  // لا نرسل الكلام إلى قاعدة البيانات لأن العمود date
+  // يقبل تاريخًا فقط.
+  //
+  // المعلومة نفسها ستظل موجودة في notes لو كانت موجودة
+  // في المحادثة.
+  return null;
+}
+
 export async function saveImportAndCreateOrder(input: {
   importId: string | null;
   customerName: string;
@@ -24,20 +114,32 @@ export async function saveImportAndCreateOrder(input: {
   const supabase = createClient();
 
   const name = input.customerName.trim();
+
   if (!name) {
     return { error: "اسم العميل مطلوب." };
   }
+
   if (input.items.length === 0) {
     return { error: "أضف منتجًا واحدًا على الأقل." };
   }
+
   for (const item of input.items) {
-    if (!item.name.trim() || item.quantity <= 0 || item.unit_price < 0) {
-      return { error: "تأكد من صحة بيانات كل المنتجات (الاسم، الكمية، السعر)." };
+    if (
+      !item.name.trim() ||
+      item.quantity <= 0 ||
+      item.unit_price < 0
+    ) {
+      return {
+        error:
+          "تأكد من صحة بيانات كل المنتجات (الاسم، الكمية، السعر).",
+      };
     }
   }
 
-  // البحث عن عميل بنفس رقم الهاتف داخل نفس الـ business لتفادي التكرار.
-  // لو مفيش هاتف، ننشئ عميل جديد دائمًا (الاسم وحده مش معرّف كافٍ).
+  // ==========================================
+  // العميل
+  // ==========================================
+
   let customerId: string | null = null;
 
   if (input.customerPhone.trim()) {
@@ -66,20 +168,29 @@ export async function saveImportAndCreateOrder(input: {
       .single();
 
     if (customerError || !newCustomer) {
-      return { error: "تعذّر حفظ بيانات العميل: " + customerError?.message };
+      return {
+        error:
+          "تعذّر حفظ بيانات العميل: " +
+          (customerError?.message || "خطأ غير معروف"),
+      };
     }
+
     customerId = newCustomer.id;
   }
 
+  // ==========================================
+  // حساب إجمالي الطلب
+  // ==========================================
+
   const total = input.items.reduce(
-    (sum, i) => sum + i.quantity * i.unit_price,
+    (sum, item) => sum + item.quantity * item.unit_price,
     0
   );
 
-  // جدول orders لا يحتوي على عمود payment_method في الـ schema المعتمد
-  // (Task 2) — طريقة الدفع الفعلية تُسجَّل لاحقًا في جدول payments عند
-  // إنشاء الفاتورة وتسجيل الدفعة. لتفادي فقدان المعلومة اللي استخرجها
-  // الـ AI بصمت، نلحقها بالملاحظات كمرجع للمستخدم فقط.
+  // ==========================================
+  // طريقة الدفع
+  // ==========================================
+
   const methodLabel: Record<string, string> = {
     cash: "نقدًا",
     cash_on_delivery: "الدفع عند الاستلام",
@@ -87,11 +198,48 @@ export async function saveImportAndCreateOrder(input: {
     card: "بطاقة",
     other: "أخرى",
   };
-  const notesParts = [input.notes.trim()];
-  if (input.paymentMethod && methodLabel[input.paymentMethod]) {
-    notesParts.push(`طريقة الدفع المذكورة في المحادثة: ${methodLabel[input.paymentMethod]}`);
+
+  const notesParts: string[] = [];
+
+  if (input.notes.trim()) {
+    notesParts.push(input.notes.trim());
   }
-  const combinedNotes = notesParts.filter(Boolean).join(" | ") || null;
+
+  if (
+    input.paymentMethod &&
+    methodLabel[input.paymentMethod]
+  ) {
+    notesParts.push(
+      `طريقة الدفع المذكورة في المحادثة: ${methodLabel[input.paymentMethod]}`
+    );
+  }
+
+  // نحتفظ بالتاريخ الأصلي لو كان AI استخرج كلامًا مثل:
+  // "اليوم الساعة 8 مساءً"
+  //
+  // حتى لا تضيع المعلومة.
+  if (input.deliveryDate.trim()) {
+    notesParts.push(
+      `موعد التسليم المذكور: ${input.deliveryDate.trim()}`
+    );
+  }
+
+  const combinedNotes =
+    notesParts.length > 0
+      ? notesParts.join(" | ")
+      : null;
+
+  // ==========================================
+  // تحويل التاريخ إلى Date صالح لقاعدة البيانات
+  // ==========================================
+
+  const deliveryDate = normalizeDeliveryDate(
+    input.deliveryDate
+  );
+
+  // ==========================================
+  // إنشاء الطلب
+  // ==========================================
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
@@ -100,21 +248,32 @@ export async function saveImportAndCreateOrder(input: {
       customer_id: customerId,
       total,
       notes: combinedNotes,
-      delivery_date: input.deliveryDate || null,
+      delivery_date: deliveryDate,
     })
     .select("id")
     .single();
 
   if (orderError || !order) {
-    return { error: "تعذّر إنشاء الطلب: " + orderError?.message };
+    return {
+      error:
+        "تعذّر إنشاء الطلب: " +
+        (orderError?.message || "خطأ غير معروف"),
+    };
   }
 
-  const orderItemsPayload = input.items.map((i) => ({
+  // ==========================================
+  // عناصر الطلب
+  // ==========================================
+
+  const orderItemsPayload = input.items.map((item) => ({
     order_id: order.id,
-    product_name: i.name.trim(),
-    quantity: i.quantity,
-    unit_price: i.unit_price,
-    subtotal: Math.round(i.quantity * i.unit_price * 100) / 100,
+    product_name: item.name.trim(),
+    quantity: item.quantity,
+    unit_price: item.unit_price,
+    subtotal:
+      Math.round(
+        item.quantity * item.unit_price * 100
+      ) / 100,
   }));
 
   const { error: itemsError } = await supabase
@@ -122,8 +281,16 @@ export async function saveImportAndCreateOrder(input: {
     .insert(orderItemsPayload);
 
   if (itemsError) {
-    return { error: "تعذّر حفظ عناصر الطلب: " + itemsError.message };
+    return {
+      error:
+        "تعذّر حفظ عناصر الطلب: " +
+        itemsError.message,
+    };
   }
+
+  // ==========================================
+  // تحديث سجل الاستيراد
+  // ==========================================
 
   if (input.importId) {
     await supabase
@@ -132,5 +299,9 @@ export async function saveImportAndCreateOrder(input: {
       .eq("id", input.importId);
   }
 
+  // ==========================================
+  // الانتقال إلى تفاصيل الطلب
+  // ==========================================
+
   redirect(`/orders/${order.id}`);
-}
+                          }
