@@ -111,8 +111,12 @@ async function callGemini(rawText: string): Promise<string> {
       throw err;
     }
 
+    console.error("GEMINI API ERROR:", err);
+
     throw new AIParseError(
-      "حدث خطأ أثناء الاتصال بخدمة Google Gemini.",
+      `Gemini Error: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
       err
     );
   }
