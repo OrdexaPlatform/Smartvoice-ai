@@ -1,4 +1,8 @@
-import { parsedConversationSchema, type ParsedConversationInput } from "./schema";
+import { GoogleGenAI } from "@google/genai";
+import {
+  parsedConversationSchema,
+  type ParsedConversationInput,
+} from "./schema";
 
 const SYSTEM_PROMPT = `أنت نظام استخراج بيانات من محادثات WhatsApp لمتجر أو شركة صغيرة تتحدث العربية (فصحى أو عامية، خصوصًا المصرية).
 
@@ -12,9 +16,19 @@ const SYSTEM_PROMPT = `أنت نظام استخراج بيانات من محاد
 
 الشكل المطلوب بالضبط:
 {
-  "customer": { "name": string|null, "phone": string|null, "address": string|null },
+  "customer": {
+    "name": string|null,
+    "phone": string|null,
+    "address": string|null
+  },
   "order": {
-    "items": [ { "name": string, "quantity": number, "unit_price": number|null } ],
+    "items": [
+      {
+        "name": string,
+        "quantity": number,
+        "unit_price": number|null
+      }
+    ],
     "payment_method": "cash"|"cash_on_delivery"|"bank_transfer"|"card"|"other"|null,
     "payment_status": "unpaid"|"paid"|null,
     "delivery_date": string|null,
@@ -29,31 +43,20 @@ export class AIParseError extends Error {
   }
 }
 
-/**
- * نقطة الدخول الوحيدة لتحليل محادثة WhatsApp. باقي الكود (API route،
- * صفحة Review) لا يعرف أي شيء عن مزوّد الذكاء الاصطناعي المستخدم —
- * لتغييره لاحقًا (OpenAI، Gemini، إلخ) يكفي تعديل هذا الملف فقط.
- */
 export async function parseConversation(
   rawText: string
 ): Promise<ParsedConversationInput> {
-  const provider = process.env.AI_PROVIDER || "anthropic";
-
-  let rawOutput: string;
-
-  switch (provider) {
-    case "anthropic":
-      rawOutput = await callAnthropic(rawText);
-      break;
-    default:
-      throw new AIParseError(`مزوّد الذكاء الاصطناعي غير مدعوم: ${provider}`);
-  }
+  const rawOutput = await callGemini(rawText);
 
   let parsedJson: unknown;
+
   try {
-    // بعض النماذج قد تُحيط بالـ JSON بـ ```json ... ``` رغم التعليمات،
-    // نزيلها احتياطًا قبل parsing.
-    const cleaned = rawOutput.replace(/^```json\s*|```\s*$/g, "").trim();
+    const cleaned = rawOutput
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+
     parsedJson = JSON.parse(cleaned);
   } catch (err) {
     throw new AIParseError(
@@ -63,6 +66,7 @@ export async function parseConversation(
   }
 
   const result = parsedConversationSchema.safeParse(parsedJson);
+
   if (!result.success) {
     throw new AIParseError(
       "رد الذكاء الاصطناعي لا يطابق الصيغة المتوقعة.",
@@ -73,48 +77,43 @@ export async function parseConversation(
   return result.data;
 }
 
-async function callAnthropic(rawText: string): Promise<string> {
-  const apiKey = process.env.AI_API_KEY;
+async function callGemini(rawText: string): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+
   if (!apiKey) {
-    throw new AIParseError("متغيّر البيئة AI_API_KEY غير مضبوط.");
+    throw new AIParseError("متغيّر البيئة GEMINI_API_KEY غير مضبوط.");
   }
 
-  let response: Response;
   try {
-    response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1500,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: rawText }],
-      }),
+    const ai = new GoogleGenAI({
+      apiKey,
     });
-  } catch (err) {
-    throw new AIParseError("تعذّر الاتصال بخدمة الذكاء الاصطناعي.", err);
-  }
 
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: rawText,
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+        temperature: 0,
+        responseMimeType: "application/json",
+      },
+    });
+
+    const text = response.text;
+
+    if (!text) {
+      throw new AIParseError("رد الذكاء الاصطناعي فارغ.");
+    }
+
+    return text;
+  } catch (err) {
+    if (err instanceof AIParseError) {
+      throw err;
+    }
+
     throw new AIParseError(
-      `خدمة الذكاء الاصطناعي أرجعت خطأ (${response.status}).`,
-      body
+      "حدث خطأ أثناء الاتصال بخدمة Google Gemini.",
+      err
     );
   }
-
-  const data = await response.json();
-  const textBlock = data?.content?.find(
-    (block: { type: string }) => block.type === "text"
-  );
-
-  if (!textBlock?.text) {
-    throw new AIParseError("رد الذكاء الاصطناعي فارغ.");
-  }
-
-  return textBlock.text as string;
 }
