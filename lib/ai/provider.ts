@@ -78,7 +78,7 @@ export async function parseConversation(
 }
 
 async function callGemini(rawText: string): Promise<string> {
-  const apiKey = "AQ.Ab8RN6Is_0YJm5vI7crk6_z3_wqDtuyFn60DtKY5SU9f_auXXQ"
+  const apiKey = "AQ.Ab8RN6LbEMa2wX-gzeOPw4meh6-ovq5QjdragBvYP47f5vN73g"
 
   if (!apiKey) {
     throw new AIParseError("متغيّر البيئة GEMINI_API_KEY غير مضبوط.");
