@@ -136,7 +136,7 @@ async function callGemini(rawText: string): Promise<string> {
      * لأنه غير موجود في TypeScript type الخاص بالـSDK.
      */
 
-    const output = interaction.output;
+    const output = interaction.outputs;
 
     if (!Array.isArray(output) || output.length === 0) {
       throw new AIParseError("رد الذكاء الاصطناعي فارغ.");
