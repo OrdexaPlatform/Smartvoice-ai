@@ -103,11 +103,15 @@ export async function parseConversation(
 }
 
 async function callGemini(rawText: string): Promise<string> {
-  // ضع مفتاح Gemini الخاص بك هنا.
-  // لا ترسل المفتاح في المحادثة.
-  const apiKey = "AQ.Ab8RN6LbEMa2wX-gzeOPw4meh6-ovq5QjdragBvYP47f5vN73g";
+  // =========================================================
+  // ضع مفتاح Gemini الجديد هنا
+  // =========================================================
 
-  if (!apiKey || apiKey === "ضع_مفتاح_GEMINI_هنا") {
+  const apiKey = "AQ.Ab8RN6LC-_9o7shruVn0XEzdxibOtlwRiWAngf4XPzREOJ-Otg";
+
+  // =========================================================
+
+  if (!apiKey || apiKey === "AQ.Ab8RN6LC-_9o7shruVn0XEzdxibOtlwRiWAngf4XPzREOJ-Otg") {
     throw new AIParseError("مفتاح Gemini غير مضبوط.");
   }
 
@@ -127,9 +131,11 @@ async function callGemini(rawText: string): Promise<string> {
     });
 
     /*
-     * Interaction لا يحتوي على output_text في TypeScript.
-     * نستخرج النص من output.
+     * استخراج النص من Interaction.
+     * لا نستخدم interaction.output_text
+     * لأنه غير موجود في TypeScript type الخاص بالـSDK.
      */
+
     const output = interaction.output;
 
     if (!Array.isArray(output) || output.length === 0) {
@@ -149,10 +155,12 @@ async function callGemini(rawText: string): Promise<string> {
         content?: unknown;
       };
 
+      // بعض أشكال الـoutput تحتوي text مباشرة
       if (typeof block.text === "string") {
         text += block.text;
       }
 
+      // شكل آخر يحتوي content كنص
       if (
         block.type === "text" &&
         typeof block.content === "string"
@@ -160,6 +168,7 @@ async function callGemini(rawText: string): Promise<string> {
         text += block.content;
       }
 
+      // وبعض الردود تحتوي content كمصفوفة
       if (Array.isArray(block.content)) {
         for (const contentItem of block.content) {
           if (
@@ -195,4 +204,4 @@ async function callGemini(rawText: string): Promise<string> {
       err
     );
   }
-      }
+}
