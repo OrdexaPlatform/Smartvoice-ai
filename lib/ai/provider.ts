@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { createClient } from "@/lib/supabase/server";
 import {
   parsedConversationSchema,
   type ParsedConversationInput,
@@ -66,6 +66,10 @@ export class AIParseError extends Error {
 export async function parseConversation(
   rawText: string
 ): Promise<ParsedConversationInput> {
+  if (!rawText.trim()) {
+    throw new AIParseError("نص المحادثة فارغ.");
+  }
+
   const rawOutput = await callGemini(rawText);
 
   let parsedJson: unknown;
@@ -103,99 +107,52 @@ export async function parseConversation(
 }
 
 async function callGemini(rawText: string): Promise<string> {
-  // =========================================================
-  // ضع مفتاح Gemini الجديد هنا
-  // =========================================================
-
-  const apiKey = "AQ.Ab8RN6LC-_9o7shruVn0XEzdxibOtlwRiWAngf4XPzREOJ-Otg";
-
-  // =========================================================
-
-  if (!apiKey || apiKey === "AQ.Ab8RN6LC-_9o7shruVn0XEzdxibOtlwRiWAngf4XPzREOJ-Otg") {
-    throw new AIParseError("مفتاح Gemini غير مضبوط.");
-  }
-
   try {
-    const ai = new GoogleGenAI({
-      apiKey,
-    });
+    const supabase = createClient();
 
-    const interaction = await ai.interactions.create({
-      model: "gemini-3.6-flash",
-      input: rawText,
-      system_instruction: SYSTEM_PROMPT,
-      generation_config: {
-        temperature: 0,
-      },
-      store: false,
-    });
+    const { data, error } = await supabase.functions.invoke(
+      "gemini-parse",
+      {
+        body: {
+          text: rawText,
+          systemPrompt: SYSTEM_PROMPT,
+        },
+      }
+    );
 
-    /*
-     * استخراج النص من Interaction.
-     * لا نستخدم interaction.output_text
-     * لأنه غير موجود في TypeScript type الخاص بالـSDK.
-     */
+    if (error) {
+      console.error("SUPABASE GEMINI FUNCTION ERROR:", error);
 
-    const output = interaction.outputs;
-
-    if (!Array.isArray(output) || output.length === 0) {
-      throw new AIParseError("رد الذكاء الاصطناعي فارغ.");
+      throw new AIParseError(
+        `تعذّر الاتصال بخدمة Gemini: ${error.message}`
+      );
     }
 
-    let text = "";
-
-    for (const item of output) {
-      if (!item || typeof item !== "object") {
-        continue;
-      }
-
-      const block = item as {
-        type?: string;
-        text?: string;
-        content?: unknown;
-      };
-
-      // بعض أشكال الـoutput تحتوي text مباشرة
-      if (typeof block.text === "string") {
-        text += block.text;
-      }
-
-      // شكل آخر يحتوي content كنص
-      if (
-        block.type === "text" &&
-        typeof block.content === "string"
-      ) {
-        text += block.content;
-      }
-
-      // وبعض الردود تحتوي content كمصفوفة
-      if (Array.isArray(block.content)) {
-        for (const contentItem of block.content) {
-          if (
-            contentItem &&
-            typeof contentItem === "object" &&
-            "text" in contentItem &&
-            typeof (contentItem as { text?: unknown }).text === "string"
-          ) {
-            text += (contentItem as { text: string }).text;
-          }
-        }
-      }
+    if (!data) {
+      throw new AIParseError("خدمة Gemini أعادت ردًا فارغًا.");
     }
 
-    text = text.trim();
-
-    if (!text) {
-      throw new AIParseError("رد الذكاء الاصطناعي فارغ.");
+    if (data.error) {
+      throw new AIParseError(
+        `Gemini Error: ${data.error}`
+      );
     }
 
-    return text;
+    if (typeof data.text !== "string" || !data.text.trim()) {
+      console.error("INVALID GEMINI FUNCTION RESPONSE:", data);
+
+      throw new AIParseError(
+        "خدمة Gemini أعادت ردًا غير صالح."
+      );
+    }
+
+    return data.text.trim();
   } catch (err) {
     if (err instanceof AIParseError) {
       throw err;
     }
 
-    console.error("GEMINI API ERROR:", err);
+    console.error("GEMINI PROVIDER ERROR:", err);
 
     throw new AIParseError(
       `Gemini Error: ${
